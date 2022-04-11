@@ -1,0 +1,21 @@
+Package: FHI
+Type: Package
+Title: Freshwater Health Index Indicator package
+Version: 0.1.0
+Author: Nicholas J Souter <nsouter@conservation.org> [aut, cre],
+        Ibrahim Mohammed <ibrahim.mohammed@nasa.gov> [aut]
+Maintainer: Nicholas J Souter <nsouter@conservation.org>
+Description: Calculates a range of Freshwater Health Index metrics
+    Use four spaces when indenting paragraphs within the Description.
+License: CC0
+URL: https://github.com/Nick-Souter/FHI
+BugReports: https://github.com/Nick-Souter/FHI/issues
+Encoding: UTF-8
+LazyData: true
+Suggests: knitr, rmarkdown
+VignetteBuilder: knitr
+Depends: R (>= 2.10)
+RoxygenNote: 7.1.2
+Imports: EnvStats, dplyr, lubridate, reshape2, plyr, gdata
+NeedsCompilation: no
+Packaged: 2021-11-30 09:42:58 UTC; nicho
