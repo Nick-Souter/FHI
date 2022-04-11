@@ -1,0 +1,16 @@
+utils::globalVariables(c("%>%", "Date", "Month", "Year", "Regulated", "Unregulated", "Difference", "Division",
+                         "Height", "result", "Apr", "Apr_high_ci", "Apr_low_ci", "Aug Aug_high_ci", "Aug_low_ci", "CatchDate",
+                         "Catchmonth", "DFC_Ex", "DFC_Exc", "DFC_nse", "Dec", "Dec_high_ci", "Dec_low_ci", "F1", "F2", "F3",
+                         "Factor", "Feb", "Feb_high_ci", "Feb_low_ci", "Jan", "Jan_high_ci", "Jan_low_ci Jul",
+                         "Jul_high_ci", "Jul_low_ci", "Jun Jun_high_ci", "Jun_low_ci", "Location", "Mar",
+                         "Mar_high_ci", "Mar_low_ci", "May May_high_ci", "May_low_ci", "Name", "Nov",
+                         "Nov_high_ci", "Nov_low_ci", "Oct", "Oct_high_ci", "Oct_low_ci", "Sep", "Sep_high_ci",
+                         "Sep_low_ci", "Station", "Sum_var", "TN_0", "TN_1", "TN_Exc", "TN_T", "TN_nse", "TOTN_mgL",
+                         "TOTN_mgL_1", "TOTP_mgL", "TOTP_mgL_1", "TP_0", "TP_1", "TP_Exc", "TP_T", "TP_nse", "TSS_0",
+                         "TSS_1", "TSS_Exc", "TSS_T", "TSS_mgL", "TSS_nse", "WQU_0", "WQU_1", "WQU_Exc", "WQU_T", "WQU_nse",
+                         "WQ_0", "WQ_1", "WQ_Exc", "WQ_T", "WQ_nse", "WeightCaught", "WeightCaught_0",
+                         "WeightCaught_1", "WeightCaught_T", "colwise", "freq", "pH", "pH_0", "pH_1", "pH_Exc", "pH_T",
+                         "pH_nse", "parameter_1", "value", "variable", ".", "Aug", "Aug_high_ci", "Jan_low_ci", "Jul", "Jun",
+                         "Jun_high_ci", "May", "May_high_ci", "sd", "qt", "Variable", "Variable_1", "ES_0", "ES_1", "ES_T", "ES_Exc",
+                         "ES_nse"))
+
