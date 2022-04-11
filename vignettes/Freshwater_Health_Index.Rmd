@@ -1,0 +1,1361 @@
+---
+title: "Freshwater Health Index"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Freshwater_Health_Index}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Ecosystem Vitality
+## Deviation from the Natural Flow Regime
+
+The FHI R package is able to calculate the Deviation from the Natural Flow Regime (DvNF) sub indicator for both modelled and recorded flow or height data.
+
+### DvNF for Modelled data
+Modelled data consists of a paired set of daily flow or height data, one for natural conditions the other for modified (current or a future development scenario). The DvNF metric is calculated using comparisons of monthly flow and this function takes the daily flow, averages it for every month and calculates DvNF. If you already have monthly flow data DvNF can be calculated using the FHI tool box. An input file with three columns is required comprising the Date in the format YYYY/MM/DD, Regulated and Unregulated flow (e.g.Table 1).
+
+```{r, results="hide", echo=FALSE}
+data(KL_MOD)
+```
+
+```{r, results = 'asis', echo=FALSE}
+knitr::kable(
+  head(KL_MOD[, 1:3], 10), caption = 'Table 1. Example paried daily lake height data for natural and current conditions.'
+)
+```
+
+To run the function you need to load the 'dplyr' package and have 'lubridate' installed - if all goes well the code will call it as needed.
+
+```{r, message=FALSE}
+library(dplyr)
+```
+
+To calculate DvNF use the ```DvNF_model``` function as follows:
+
+```{r, echo=FALSE}
+DvNF_model <- function (x){
+  ##Summarise daily flow/height records into mean monthly records for each year
+  ##date saved in form YYY/MM/DD
+  Org_regulated <- dplyr::mutate(x, Date = lubridate::ymd(Date),Year = lubridate::year(Date), Month = lubridate::month(Date)) %>%
+    dplyr::group_by(Month, Year) %>%
+    dplyr::summarise(Regulated = mean(Regulated))
+  Org_unregulated <- dplyr::mutate(x, Date = lubridate::ymd(Date),Year = lubridate::year(Date), Month = lubridate::month(Date)) %>%
+    dplyr::group_by(Month, Year) %>%
+    dplyr::summarise(Unregulated = mean(Unregulated))
+  ##first AAPFD calculation
+  Reg_unreg<- cbind(Org_regulated, Unregulated = Org_unregulated$Unregulated) %>%
+    dplyr::mutate(Difference = (Regulated - Unregulated))
+
+  ##determine unregulated flow for each month
+  Unreg <- subset(Org_unregulated) %>%
+    dplyr::summarise(Unreg = mean(Unregulated))
+  Reg_unreg_1<-dplyr::full_join(Reg_unreg,Unreg, by="Month")
+
+  ##determine number of years
+  All_years <- Reg_unreg[2]
+  Num_Years<-dplyr::summarise(All_years, dplyr::n_distinct(Year))
+  Num_Years_1<-as.numeric(Num_Years)
+
+  ##next AAPFD calculation
+  Reg_unreg_2 <- dplyr::mutate(Reg_unreg_1, Division = (Difference/Unreg)^2)
+
+  ##progressing on with AAPFD sum difference for each year
+
+  Reg_unreg_3 <-  dplyr::group_by(Reg_unreg_2, Year ) %>%
+    dplyr::summarise(Year_sum = sum(Division))
+  Reg_unreg_4 <- dplyr::mutate(Reg_unreg_3, Rooted = (sqrt(Reg_unreg_3$Year_sum))/Num_Years_1)
+
+  ##calculate AAPFD metric
+  ##this isnt correct need to sum months for each year then divide by Num_years then sum
+  AAPFD <- sum(Reg_unreg_4$Rooted)
+
+  ##calculate DvNF metric
+  DvNF <- ifelse(AAPFD < 0.3, (100 - (100*AAPFD)),
+                 ifelse(AAPFD <0.5, (85-(50*AAPFD)),
+                        ifelse(AAPFD <2, (80-(20*AAPFD)),
+                               ifelse(AAPFD <5, (50-(10*AAPFD)),0))))
+  return(data.frame(AAPFD = AAPFD, DvNF = DvNF))
+}
+```
+
+```{r}
+DvNF_model(KL_MOD)
+```
+
+This provides two outputs AAPFD, the Amended Annual Proportional Flow Deviation from which Deviation from Natural Flow Regime (DvNF) is calculated.
+
+### DvNF for Measured data
+Measured data consists of a time series of measured daily flow or height data. The DvNF metric is calculated using comparisons of monthly flow and this function takes the daily flow, averages it for every month and calculates DvNF. The FHI tool box currently cannot calculate DvNF from a time series of measured data. An input file with two columns is required comprising the Date in the format YYYY/MM/DD, and measured flow or height data (e.g.Table 2).
+
+```{r, results="hide", echo=FALSE}
+data(PK_HT)
+```
+
+```{r, results = 'asis', echo=FALSE}
+knitr::kable(
+  head(PK_HT[, 1:2], 10), caption = 'Table 2. Example measured daily lake height data.'
+)
+```
+
+ To run the function you need to load two packages 'lubridate' and 'dplyr'
+ To calculate DvNF use the ```DvNF_gauge``` function entering the name of the input data file, the start year for regulated period (in this case, 2014) and end year of the unregulated data (in this case 1990). 
+ 
+```{r, echo=FALSE}
+ DvNF_gauge <- function (x,y,z){
+  ##Summarise daily flow/height records into mean monthly records for each year
+  Org_data <- dplyr::mutate(x, Date = lubridate::ymd(Date),Year = lubridate::year(Date), Month = lubridate::month(Date)) %>%
+    dplyr::group_by(Month, Year) %>%
+    dplyr:: summarise(result = mean(Height))
+  ##subset the regulated flow data based on the start year for regulation
+  ##all data within and after this year will be selected
+  Reg <-  subset(Org_data, Year >= y) %>%
+    dplyr::summarise(Regulated = mean(result))
+  ##subset the unregulated flow data based on last unregulated year
+  ##all data before and including this year will be selected
+  Unreg <- subset(Org_data, Year <= z) %>%
+    dplyr::summarise(Unregulated = mean(result))
+  Combined <- cbind(Reg, Unregulated = Unreg$Unregulated) %>%
+    dplyr::mutate(Difference = ((Regulated - Unregulated)/Unregulated)^2)
+  ##calculate AAPFD metric
+  AAPFD <- sqrt(sum(Combined$Difference))
+  ##calculate DvNF metric
+  DvNF <- ifelse(AAPFD < 0.3, (100 - (100*AAPFD)),
+                 ifelse(AAPFD <0.5, (85-(50*AAPFD)),
+                        ifelse(AAPFD <2, (80-(20*AAPFD)),
+                               ifelse(AAPFD <5, (50-(10*AAPFD)),0))))
+  return(data.frame(AAPFD = AAPFD, DvNF = DvNF))
+}
+```
+
+```{r}
+DvNF_gauge(PK_HT, 2014, 1990)
+```
+ 
+This provides two outputs AAPFD, the Amended Annual Proportional Flow Deviation from which Deviation from Natural Flow Regime (DvNF) is calculated.
+
+# Water Quality
+The FHI has two water quality metrics. The Ecosystem Vitality Water Quality metric measures the deviation of several water quality metrics from benchmarks for the protection of aquatic ecosystems. The metric has three major indicators which can be calculated using the following functions:  total nitrogen, ```EV_TN```; and total phosphorous, ```EV_TP```; and suspended solids in surface water,```EV_TSS```. This last function is only used for cases where threshold values for suspended solids are undefined as per Souter et al., (2020). Along with these parameters several other indicators of major concern for water quality can also be added and along with pH, ```EV_pH```; may include temperature, salinity, dissolved oxygen, electrical conductivity, total dissolved solids, heavy metals and coliforms, pharmaceuticals and other contaminants. These and other parameters can be calculaed using two generic functions ```EV_WQ``` when threshold values are known, or ```EV_WQU``` when thresholds are unknown but can be calculated using the method described for total suspended soilds in Souter et al., (2020). The Ecosystem Service Regulation and Support indicators includes the Deviation of Water Quality Metrics from Benchmarks indicator. For some indicators this uses different thresholds than the Ecosystem Vitality indicator and is not limited in the number of parameters measured. However the same functions are used.  
+
+To run these functions you need four packages. Two, 'plyr','dplyr', need to be loaded.
+```{r, message=FALSE}
+library(plyr)
+library(dplyr)
+```
+
+Whilst 'gdata' and 'reshape2' need only be installed as the code will call them when required.
+
+```{r, results="hide", echo=FALSE}
+data(Wq3S_Cam)
+```
+
+```{r, results = 'asis', echo=FALSE}
+knitr::kable(
+  head(Wq3S_Cam[, 1:10], 10), caption = 'Table 3. Example water quality data.'
+)
+```
+
+As examples calculate three of the metrics: total nitrogen, ```EV_TN```; and total phosphorous, ```EV_TP```; and suspended solids in surface water,```EV_TSS```
+
+```{r, echo=FALSE}
+EV_TN<- function (x, TN_low, TN_high){
+    x$TN_low <- TN_low
+    x$TN_high <- TN_high
+    Wq_TN_F1_1<-plyr::ddply(x,.(TOTN_mgL),transform,
+                      TOTN_mgL_1 = ifelse(TOTN_mgL < TN_low,0,(ifelse(TOTN_mgL > TN_high,0,1))))%>%
+    ##calculate F1 values
+      plyr::ddply(.(Name), plyr::summarise,
+                 TN_0 = sum(TOTN_mgL_1=="0",na.rm=T), TN_1 = sum(TOTN_mgL_1=="1",na.rm=T))
+
+
+    ##calculate individual site values for F1 and F2, an F1 of 1 means a failure
+    Wq_TN_F1_2<-plyr::ddply(Wq_TN_F1_1,.(TN_0), transform, TN_F1 = ifelse(TN_0==0,0,1))%>%
+
+    ##summary F1 values
+    ## melt data prior to analysis if you get an error object 'Name' not found then you need to attach the names to the input data file
+      reshape2::melt(id.vars=c("Name"))
+
+    ## number of occurrences which exceeded threshold value this needs to be its own variable for later use
+    Wq_TN_F1_3<-plyr::ddply(Wq_TN_F1_2,. (variable), summarise, Sum_var = sum(value))
+
+    ##determine number of sites
+    Wq_TN_sites_1 <- plyr::ddply(Wq_TN_F1_2, .(Name), summarise, Numb = length(unique(Name)))
+
+    Wq_TN_sites_2 <- plyr::count(Wq_TN_sites_1$Numb)
+
+
+    ##Final calculations of F1 values
+    Wq_TN_F1_3$freq<-Wq_TN_sites_2$freq
+    Wq_TN_F1_4 <- plyr::ddply(Wq_TN_F1_3,. (variable, Sum_var), transform,
+                     F1 = (Sum_var/(freq)*100),
+                     ESI_F1 = 100-((Sum_var/(freq))*100)
+    )
+    Wq_TN_F1_4<-Wq_TN_F1_4[,-3]
+
+
+    ##F1 values for difference in site
+    F1_output <- subset(Wq_TN_F1_4, select = c("variable", "F1", "ESI_F1"), variable == c("TN_F1"))
+
+
+############################################################################################################
+   ## CALCULATE F2##
+   ##calculate total number of instances monitored for each site
+   Wq_TN_F2_1 <- plyr::ddply(Wq_TN_F1_1,. (Name, TN_0, TN_1), transform,
+                             TN_T = TN_0 + TN_1, Factor = "F2")%>%
+     subset(., select = c("TN_0", "TN_T", "Factor"))
+
+   Wq_TN_F2_2 <-  plyr::ddply(Wq_TN_F2_1, .(Factor), colwise(sum))
+
+   ##Calculate F2 values
+   F2_output <- plyr::ddply(Wq_TN_F2_2,. (TN_0, TN_T), transform, TN_F2 = ((TN_0/TN_T)*100))%>%
+    ## melt data prior to analysis
+    reshape2::melt(., id.vars=c("Factor"))%>%
+    subset(., select = c("variable", "value"), variable == c("TN_F2"))
+
+###########################################################################################################
+  ## calculate ENI for F1 AND F2
+  ## combine the F1 and F2 output and then clean it up
+  F2_output <-rename(F2_output, c("variable"="var"))
+  F1_F2<-cbind(F1_output,F2_output)%>%
+    rename(., c("value"="F2"))%>%
+    plyr::ddply(.,.(variable), transform, Parameter=ifelse(variable=="TN_F1","TN","TN"))%>%
+    subset(., select = c("Parameter","F1", "F2"))
+
+########################################################################################
+  ##calculate F3
+  Wq_TN_F3_1<-plyr::ddply(x,.(TOTN_mgL),transform,
+                         TN_Exc = ifelse(TOTN_mgL < TN_low,(TN_low/TOTN_mgL)-1,
+                                   ifelse(TOTN_mgL > TN_high,(TOTN_mgL/TN_high)-1,NA)),
+                         Factor = "F3")%>%
+
+    ##sum of all excursions
+    subset(., select = c("TN_Exc", "Factor"))%>%
+    plyr::ddply(., .(Factor), colwise(sum), na.rm=T)
+    ## total number of instances
+
+  ##combine sum of excursions and instances
+  Wq_TN_F3_2<-subset(Wq_TN_F2_2, select = c("Factor", "TN_T"))%>%
+    rename(., c("Factor"="Fact"))
+
+  Wq_TN_F3_3<-cbind(Wq_TN_F3_1,Wq_TN_F3_2)%>%
+    subset(., select = c("Factor", "TN_Exc", "TN_T"))%>%
+    plyr::ddply(.,. (TN_Exc), transform, TN_nse = TN_Exc/TN_T)%>%
+    plyr::ddply(., . (TN_nse), transform, TN_F3 = ((TN_nse)/(TN_nse+1))*100)%>%
+    ## summarise F3 calculations
+    subset(., select = c("Factor", "TN_F3"))%>%
+    ## calculate ENI for F3
+    reshape2::melt(., id.vars=c("Factor"))
+
+  ## combine the F1, F2 and F3 output and then clean it up
+  F1_F2_F3<-cbind(F1_F2, Wq_TN_F3_3)%>%
+    rename(., c("value"="F3"))%>%
+    subset(., select = c("Parameter","F1", "F2", "F3"))
+
+  ##Method 2 ESI
+  ESI_F1_F3_TN <- plyr::ddply(F1_F2_F3,. (F1,F3), transform,
+                     ESI_F1_3 = 100-(sqrt(F1*F3)))
+
+  return(ESI_F1_F3_TN)
+}
+```
+
+```{r, echo=FALSE}
+EV_TP<- function (x, TP_high){
+  x$TP_high <- TP_high
+  Wq_TP_F1_1<-plyr::ddply(x,.(TOTP_mgL),transform,
+                          TOTP_mgL_1 = ifelse(TOTP_mgL > TP_high,0,1))%>%
+    ##calculate F1 values
+    plyr::ddply(.(Name), plyr::summarise,
+                TP_0 = sum(TOTP_mgL_1=="0",na.rm=T), TP_1 = sum(TOTP_mgL_1=="1",na.rm=T))
+
+  ##calculate individual site values for F1 and F2, an F1 of 1 means a failure
+  Wq_TP_F1_2<-plyr::ddply(Wq_TP_F1_1,.(TP_0), transform, TP_F1 = ifelse(TP_0==0,0,1))%>%
+
+    ##summary F1 values
+    ## melt data prior to analysis if you get an error object 'Name' not found then you need to attach the names to the input data file
+    reshape2::melt(id.vars=c("Name"))
+
+  ## number of occurrances which exceeded threshold value this needs to be its own variable for later use
+  Wq_TP_F1_3<-plyr::ddply(Wq_TP_F1_2,. (variable), summarise, Sum_var = sum(value))
+
+  ##determine number of sites
+  Wq_TP_sites_1 <- plyr::ddply(Wq_TP_F1_2, .(Name), summarise, Numb = length(unique(Name)))
+
+  Wq_TP_sites_2 <- plyr::count(Wq_TP_sites_1$Numb)
+
+  ##Final calculations of F1 values
+  Wq_TP_F1_3$freq<-Wq_TP_sites_2$freq
+  Wq_TP_F1_4 <- plyr::ddply(Wq_TP_F1_3,. (variable, Sum_var), transform,
+                            F1 = (Sum_var/(freq)*100),
+                            ESI_F1 = 100-((Sum_var/(freq))*100)
+  )
+  Wq_TP_F1_4<-Wq_TP_F1_4[,-3]
+
+  ##F1 values for difference in site
+  F1_output <- subset(Wq_TP_F1_4, select = c("variable", "F1", "ESI_F1"), variable == c("TP_F1"))
+
+  ############################################################################################################
+  ## CALCULATE F2##
+  ##calculate total number of instances monitored for each site
+  Wq_TP_F2_1 <- plyr::ddply(Wq_TP_F1_1,. (Name, TP_0, TP_1), transform,
+                            TP_T = TP_0 + TP_1, Factor = "F2")%>%
+    subset(., select = c("TP_0", "TP_T", "Factor"))
+
+  Wq_TP_F2_2 <-  plyr::ddply(Wq_TP_F2_1, .(Factor), colwise(sum))
+
+  ##Calculate F2 values
+  F2_output <- plyr::ddply(Wq_TP_F2_2,. (TP_0, TP_T), transform, TP_F2 = ((TP_0/TP_T)*100))%>%
+    ## melt data prior to analysis
+    reshape2::melt(., id.vars=c("Factor"))%>%
+    subset(., select = c("variable", "value"), variable == c("TP_F2"))
+
+  ###########################################################################################################
+  ## calculate ENI for F1 AND F2
+  ## combine the F1 and F2 output and then clean it up
+  F2_output <-rename(F2_output, c("variable"="var"))
+  F1_F2<-cbind(F1_output,F2_output)%>%
+    rename(., c("value"="F2"))%>%
+    plyr::ddply(.,.(variable), transform, Parameter=ifelse(variable=="TP_F1","TP","TP"))%>%
+    subset(., select = c("Parameter","F1", "F2"))
+
+  ########################################################################################
+  ##calculate F3
+  Wq_TP_F3_1<-plyr::ddply(x,.(TOTP_mgL),transform,
+                          TP_Exc = ifelse(TOTP_mgL > TP_high,(TOTP_mgL/TP_high)-1,NA),
+                          Factor = "F3")%>%
+
+    ##sum of all excursions
+    subset(., select = c("TP_Exc", "Factor"))%>%
+    plyr::ddply(., .(Factor), colwise(sum), na.rm=T)
+  ## total number of instances
+
+  ##combine sum of excursions and instances
+  Wq_TP_F3_2<-subset(Wq_TP_F2_2, select = c("Factor", "TP_T"))%>%
+    rename(., c("Factor"="Fact"))
+
+  Wq_TP_F3_3<-cbind(Wq_TP_F3_1,Wq_TP_F3_2)%>%
+    subset(., select = c("Factor", "TP_Exc", "TP_T"))%>%
+    plyr::ddply(.,. (TP_Exc), transform, TP_nse = TP_Exc/TP_T)%>%
+    plyr::ddply(., . (TP_nse), transform, TP_F3 = ((TP_nse)/(TP_nse+1))*100)%>%
+    ## summarise F3 calculations
+    subset(., select = c("Factor", "TP_F3"))%>%
+    ## calculate ENI for F3
+    reshape2::melt(., id.vars=c("Factor"))
+
+  ## combine the F1, F2 and F3 output and then clean it up
+  F1_F2_F3<-cbind(F1_F2, Wq_TP_F3_3)%>%
+    rename(., c("value"="F3"))%>%
+    subset(., select = c("Parameter","F1", "F2", "F3"))
+
+  ##Method 2 ESI
+  ESI_F1_F3_TP <- plyr::ddply(F1_F2_F3,. (F1,F3), transform,
+                           ESI_F1_3 = 100-(sqrt(F1*F3)))
+
+  return(ESI_F1_F3_TP)
+}
+```
+
+```{r, results="hide", echo=FALSE}
+utils::globalVariables(c("sd", "qt"))
+```
+
+```{r, echo=FALSE}
+Summary_stats <- function(x, measurevar, groupvars=NULL, na.rm=FALSE,
+                          conf.interval=.99, .drop=TRUE) {
+
+  # New version of length which can handle NA's: if na.rm==T, don't count them
+  length2 <- function (x, na.rm=FALSE) {
+    if (na.rm) sum(!is.na(x))
+    else       length(x)
+  }
+
+  # This does the summary. For each group's data frame, return a vector with
+  # N, mean, and sd
+  datac <- plyr::ddply(x, groupvars, .drop=.drop,
+                       .fun = function(xx, col) {
+                         c(N    = length2(xx[[col]], na.rm=na.rm),
+                           mean = mean   (xx[[col]], na.rm=na.rm),
+                           sd   = sd     (xx[[col]], na.rm=na.rm),
+                           min  = min	   (xx[[col]], na.rm=na.rm),
+                           max  = max	   (xx[[col]], na.rm=na.rm)
+                         )
+                       },
+                       measurevar
+  )
+
+  # Rename the "mean" column
+  datac <- rename(datac, c("mean" = measurevar))
+
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+
+  # Confidence interval multiplier for standard error
+  # Calculate t-statistic for confidence interval:
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+
+  return(datac)
+}
+```
+
+```{r, echo=FALSE}
+EV_TSS<- function (x,y){
+  ##subset TSS only
+  TSS <- subset(x, select = c("Name", "Year", "Month", "TSS_mgL"))
+
+  ##subset of TSS prior to the cut-off year
+  TSS_prior <- subset(TSS, Year <= y)
+
+  ##Mean with 99% confidence intervals not used
+  TSS_prior_summary<-Summary_stats(TSS_prior, measurevar="TSS_mgL", groupvars=c("Month"), na.rm=T)
+
+  ## monthly max and min values used instead of confidence intervals
+  TSS_prior_min_max <- plyr::ddply(TSS_prior_summary,. (TSS_mgL, min, max), transform,
+                    low_ci=min,
+                    high_ci=max
+                  )
+  TSS_prior_min_max$Month <- factor(TSS_prior_min_max$Month, levels = month.abb)
+
+
+  ##sort by month
+  TSS_prior_min_max <-TSS_prior_min_max [order(TSS_prior_min_max$Month), ]
+
+  TSS_thresholds <- subset(TSS_prior_min_max, select = c("Month", "low_ci", "high_ci"))
+  TSS_thresholds$Month <- factor(TSS_thresholds$Month, levels = month.abb)
+  ##sort by month
+  TSS_thresholds <-TSS_thresholds [order(TSS_thresholds$Month), ]
+
+ ## TSS_thresholds_1 <- TSS_thresholds[,-1]
+
+
+ ## rownames(TSS_thresholds_1) <- TSS_thresholds[,1]
+
+  Jan_thres <- filter(TSS_thresholds, Month == "Jan")%>%
+    .[,-1]
+    names (Jan_thres)[1] <- "Jan_low_ci"
+    names (Jan_thres)[2] <- "Jan_high_ci"
+
+  Feb_thres <- filter(TSS_thresholds, Month == "Feb")%>%
+    .[,-1]
+    names (Feb_thres)[1] <- "Feb_low_ci"
+    names (Feb_thres)[2] <- "Feb_high_ci"
+
+  Mar_thres <- filter(TSS_thresholds, Month == "Mar")%>%
+    .[,-1]
+    names (Mar_thres)[1] <- "Mar_low_ci"
+    names (Mar_thres)[2] <- "Mar_high_ci"
+
+  Apr_thres <- filter(TSS_thresholds, Month == "Apr")%>%
+    .[,-1]
+    names (Apr_thres)[1] <- "Apr_low_ci"
+    names (Apr_thres)[2] <- "Apr_high_ci"
+
+  May_thres <- filter(TSS_thresholds, Month == "May")%>%
+    .[,-1]
+    names (May_thres)[1] <- "May_low_ci"
+    names (May_thres)[2] <- "May_high_ci"
+
+  Jun_thres <- filter(TSS_thresholds, Month == "Jun")%>%
+     .[,-1]
+     names (Jun_thres)[1] <- "Jun_low_ci"
+     names (Jun_thres)[2] <- "Jun_high_ci"
+
+  Jul_thres <- filter(TSS_thresholds, Month == "Jul")%>%
+    .[,-1]
+    names (Jul_thres)[1] <- "Jul_low_ci"
+    names (Jul_thres)[2] <- "Jul_high_ci"
+
+  Aug_thres <- filter(TSS_thresholds, Month == "Aug")%>%
+    .[,-1]
+    names (Aug_thres)[1] <- "Aug_low_ci"
+    names (Aug_thres)[2] <- "Aug_high_ci"
+
+  Sep_thres <- filter(TSS_thresholds, Month == "Sep")%>%
+    .[,-1]
+    names (Sep_thres)[1] <- "Sep_low_ci"
+    names (Sep_thres)[2] <- "Sep_high_ci"
+
+  Oct_thres <- filter(TSS_thresholds, Month == "Oct")%>%
+    .[,-1]
+    names (Oct_thres)[1] <- "Oct_low_ci"
+    names (Oct_thres)[2] <- "Oct_high_ci"
+
+    Nov_thres <- filter(TSS_thresholds, Month == "Nov")%>%
+    .[,-1]
+    names (Nov_thres)[1] <- "Nov_low_ci"
+    names (Nov_thres)[2] <- "Nov_high_ci"
+
+  Dec_thres <- filter(TSS_thresholds, Month == "Dec")%>%
+    .[,-1]
+    names (Dec_thres)[1] <- "Dec_low_ci"
+    names (Dec_thres)[2] <- "Dec_high_ci"
+
+  TSS_thresholds_1 <- merge(Jan_thres, Feb_thres)%>%
+    merge(.,Mar_thres)%>%
+    merge(.,Apr_thres)%>%
+    merge(.,May_thres)%>%
+    merge(.,Jun_thres)%>%
+    merge(.,Jul_thres)%>%
+    merge(.,Aug_thres)%>%
+    merge(.,Sep_thres)%>%
+    merge(.,Oct_thres)%>%
+    merge(.,Nov_thres)%>%
+    merge(.,Dec_thres)
+
+  ##subset of post period TSS data
+  TSS_post <- subset(TSS, Year > y)%>%
+  reshape2::dcast(., Name + Year~Month,  value.var = "TSS_mgL")%>%
+  cbind(., TSS_thresholds_1)
+
+  ##WQ within WQ index values, yes,1; no,0.
+  TSS_thresh<-plyr::ddply(TSS_post,.(Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec, Jan_low_ci, Jan_high_ci,
+                               Feb_low_ci, Feb_high_ci, Mar_low_ci, Mar_high_ci, Apr_low_ci, Apr_high_ci,
+                               May_low_ci, May_high_ci, Jun_low_ci, Jun_high_ci, Jul_low_ci, Jul_high_ci,
+                               Aug_low_ci, Aug_high_ci, Sep_low_ci, Sep_high_ci, Oct_low_ci, Oct_high_ci,
+                               Nov_low_ci, Nov_high_ci, Dec_low_ci, Dec_high_ci),transform,
+              TSS_Jan = ifelse(Jan <= Jan_low_ci,0,
+                               ifelse(Jan >= Jan_high_ci,0,1)),
+              TSS_Feb = ifelse(Feb <= Feb_low_ci,0,
+                              ifelse(Feb >= Feb_high_ci,0,1)),
+              TSS_Mar = ifelse(Mar <= Mar_low_ci,0,
+                              ifelse(Mar >= Mar_high_ci,0,1)),
+              TSS_Apr = ifelse(Apr <= Apr_low_ci,0,
+                              ifelse(Apr >= Apr_high_ci,0,1)),
+              TSS_May = ifelse(May <= May_low_ci,0,
+                              ifelse(May >= May_high_ci,0,1)),
+              TSS_Jun = ifelse(Jun <= Jun_low_ci,0,
+                              ifelse(Jun >= Jun_high_ci,0,1)),
+              TSS_Jul = ifelse(Jul <= Jul_low_ci,0,
+                              ifelse(Jul >= Jul_high_ci,0,1)),
+              TSS_Aug = ifelse(Aug <= Aug_low_ci,0,
+                              ifelse(Aug >= Aug_high_ci,0,1)),
+              TSS_Sep = ifelse(Sep <= Sep_low_ci,0,
+                              ifelse(Sep >= Sep_high_ci,0,1)),
+              TSS_Oct = ifelse(Oct <= Oct_low_ci,0,
+                              ifelse(Oct >= Oct_high_ci,0,1)),
+              TSS_Nov = ifelse(Nov <= Nov_low_ci,0,
+                              ifelse(Nov >= Nov_high_ci,0,1)),
+              TSS_Dec = ifelse(Dec <= Dec_low_ci,0,
+                              ifelse(Dec >= Dec_high_ci,0,1))
+                  )%>%
+    subset(., select = c("Name", "TSS_Jan", "TSS_Feb", "TSS_Mar", "TSS_Apr", "TSS_May", "TSS_Jun",
+                                  "TSS_Jul", "TSS_Aug", "TSS_Sep", "TSS_Oct", "TSS_Nov", "TSS_Dec"))%>%
+    reshape2::melt(., id.vars=c("Name"))
+
+###############################################################################################
+###############################################################################################
+
+##Calculate F1
+    TSS_F1_1 <- plyr::ddply(TSS_thresh,. (Name), summarise,
+                     TSS_0=sum(value=="0",na.rm=T), TSS_1=sum(value=="1",na.rm=T))
+
+##calculate individual site values for F1 and F2
+    TSS_F1_2 <- plyr::ddply(TSS_F1_1,. (Name), transform, TSS_F1 = ifelse(TSS_0==0,0,1))
+
+##summary F1 values
+## melt data prior to analysis
+    TSS_F1_3 <- reshape2::melt(TSS_F1_2, id.vars=c("Name"))
+
+## number of sites which exceeded threshold value
+    TSS_F1_4 <- plyr::ddply(TSS_F1_3,. (variable), summarise, Sum_var = sum(value))
+
+
+##determine number of sites
+    TSS_sites_1 <- plyr::ddply(TSS_F1_3, .(Name), summarise, count = length(unique(Name)))
+    TSS_sites_2 <- plyr::count(TSS_sites_1$count)
+
+  ##Final calculations of F1 values
+    TSS_F1_4$freq<-TSS_sites_2$freq
+    TSS_F1_5 <- plyr::ddply(TSS_F1_4,. (variable, Sum_var), transform,
+                                    F1 = (Sum_var/freq)*100,
+                                    ESI_F1 = 100-((Sum_var/freq)*100))
+
+##F1 values
+    TSS_F1_output <- subset(TSS_F1_5, select = c("variable", "F1", "ESI_F1"), variable == c("TSS_F1"))
+
+#############################################################################################################
+## CALCULATE F2
+##calculate total number of instances monitored for each site
+    TSS_F2_1 <- plyr::ddply(TSS_F1_1,. (Name,TSS_0,TSS_1), transform,
+                      TSS_T = TSS_0+ TSS_1, Factor = "F2")
+
+
+## calculate total number of instances for each site
+    TSS_F2_2 <- subset(TSS_F2_1, select = c("TSS_0", "TSS_T", "Factor"))
+
+    TSS_F2_3 <- plyr::ddply(TSS_F2_2, .(Factor), colwise(sum))
+
+##Calculate F2 values
+    TSS_F2_4 <- plyr::ddply(TSS_F2_3,. (TSS_0, TSS_T), transform,
+                            TSS_F2 = ((TSS_0/TSS_T)*100))
+
+## melt data prior to analysis
+   TSS_F2_5 <- reshape2::melt(TSS_F2_4, id.vars=c("Factor"))
+
+   TSS_F2_output <- subset(TSS_F2_5, select = c("variable", "value"), variable == c("TSS_F2"))
+
+###########################################################################################################
+## calculate ENI for F1 AND F2
+
+## combine the F1 and F2 output and then clean it up
+  TSS_F2_output <-rename(TSS_F2_output, c("variable"="var"))
+  TSS_F1_F2<-cbind(TSS_F1_output,TSS_F2_output)
+  TSS_F1_F2<-rename(TSS_F1_F2, c("value"="F2"))
+
+##rename parameters
+  TSS_F1_F2<-F1_F2 <- plyr::ddply(TSS_F1_F2,.(variable), transform,
+                                  Parameter=ifelse(variable=="TSS_F1","TSS"))
+
+  TSS_F1_F2<-subset(TSS_F1_F2, select = c("Parameter","F1", "F2"))
+
+## calculate ENI for F1 and F2
+
+  TSS_ESI_F1_F2 <- plyr::ddply(TSS_F1_F2,. (F1,F2), transform,
+                         F2_ESI = 100-sqrt(((F1^2+F2^2)/2)))
+
+########################################################################################
+##calculate F3
+
+  TSS_F3_1<-plyr::ddply(TSS_post,.(Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec, Jan_low_ci, Jan_high_ci,
+                                   Feb_low_ci, Feb_high_ci, Mar_low_ci, Mar_high_ci, Apr_low_ci, Apr_high_ci,
+                                   May_low_ci, May_high_ci, Jun_low_ci, Jun_high_ci, Jul_low_ci, Jul_high_ci,
+                                   Aug_low_ci, Aug_high_ci, Sep_low_ci, Sep_high_ci, Oct_low_ci, Oct_high_ci,
+                                   Nov_low_ci, Nov_high_ci, Dec_low_ci, Dec_high_ci),transform,
+            TSS_Jan_Exc = ifelse(Jan <= Jan_low_ci,(Jan_low_ci/Jan)-1,
+                          ifelse(Jan >= Jan_high_ci,(Jan/Jan_high_ci)-1,NA)),
+            TSS_Feb_Exc = ifelse(Feb <= Feb_low_ci,(Feb_low_ci/Feb)-1,
+                          ifelse(Feb >= Feb_high_ci,(Feb/Feb_high_ci)-1,NA)),
+            TSS_Mar_Exc = ifelse(Mar <= Mar_low_ci,(Mar_low_ci/Mar)-1,
+                          ifelse(Mar >= Mar_high_ci,(Mar/Mar_high_ci)-1,NA)),
+            TSS_Apr_Exc = ifelse(Apr <= Apr_low_ci,(Apr_low_ci/Apr)-1,
+                          ifelse(Apr >= Apr_high_ci,(Apr/Apr_high_ci)-1,NA)),
+            TSS_May_Exc = ifelse(May <= May_low_ci,(May_low_ci/May)-1,
+                          ifelse(May >= May_high_ci,(May/May_high_ci)-1,NA)),
+            TSS_Jun_Exc = ifelse(Jun <= Jun_low_ci,(Jun_low_ci/Jun)-1,
+                          ifelse(Jun >= Jun_high_ci,(Jun/Jun_high_ci)-1,NA)),
+            TSS_Jul_Exc = ifelse(Jul <= Jul_low_ci,(Jul_low_ci/Jul)-1,
+                          ifelse(Jul >= Jul_high_ci,(Jul/Jul_high_ci)-1,NA)),
+            TSS_Aug_Exc = ifelse(Aug <= Aug_low_ci,(Aug_low_ci/Aug)-1,
+                          ifelse(Aug >= Aug_high_ci,(Aug/Aug_high_ci)-1,NA)),
+            TSS_Sep_Exc = ifelse(Sep <= Sep_low_ci,(Sep_low_ci/Sep)-1,
+                          ifelse(Sep >= Sep_high_ci,(Sep/Sep_high_ci)-1,NA)),
+            TSS_Oct_Exc = ifelse(Oct <= Oct_low_ci,(Oct_low_ci/Oct)-1,
+                          ifelse(Oct >= Oct_high_ci,(Oct/Oct_high_ci)-1,NA)),
+            TSS_Nov_Exc = ifelse(Nov <= Nov_low_ci,(Nov_low_ci/Nov)-1,
+                          ifelse(Nov >= Nov_high_ci,(Nov/Nov_high_ci)-1,NA)),
+            TSS_Dec_Exc = ifelse(Dec <= Dec_low_ci,(Dec_low_ci/Dec)-1,
+                          ifelse(Dec >= Dec_high_ci,(Dec/Dec_high_ci)-1,NA)),
+            Factor = "F3")%>%
+
+##sum of all excursions
+    subset(., select = c("TSS_Jan_Exc", "TSS_Feb_Exc", "TSS_Mar_Exc", "TSS_Apr_Exc", "TSS_May_Exc", "TSS_Jun_Exc",
+                       "TSS_Jul_Exc", "TSS_Aug_Exc", "TSS_Sep_Exc", "TSS_Oct_Exc", "TSS_Nov_Exc", "TSS_Dec_Exc", "Factor"))%>%
+    reshape2::melt(., id.vars=c("Factor"))%>%
+    rename(., c("value"="TSS_Exc"))
+
+  TSS_F3_2 <-subset(TSS_F3_1, select = c("Factor","TSS_Exc"))%>%
+    plyr::ddply(., .(Factor), colwise(sum), na.rm=TRUE)
+
+## total number of instances
+  TSS_F3_3 <- subset(TSS_F2_3, select = c("Factor","TSS_T"))%>%
+
+##combine sum of excursions and instances
+    rename(., c("Factor"="Fact"))
+
+  TSS_F3_4 <- cbind(TSS_F3_2, TSS_F3_3)%>%
+    subset(., select = c("Factor","TSS_Exc", "TSS_T"))%>%
+    plyr::ddply(.,. (TSS_Exc, TSS_T), transform, TSS_nse = TSS_Exc/TSS_T)%>%
+    plyr::ddply(.,. (TSS_nse), transform, TSS_F3 = ((TSS_nse)/(TSS_nse+1))*100)%>%
+
+## summarise F3 calculations
+   subset(., select = c("Factor", "TSS_F3"))
+
+## combine the F1, F2 and F3 output and then clean it up
+  TSS_F1_F2_F3<-cbind(TSS_F1_F2, TSS_F3_4)%>%
+    rename(., c("TSS_F3"="F3"))%>%
+    subset(., select = c("Parameter","F1", "F2", "F3"))
+
+## calculate ENI for F1 and F2
+  TSS_ESI_F1_F3 <- plyr::ddply(TSS_F1_F2_F3,. (F1,F2,F3), transform, ESI_F1_3 = 100-sqrt(F1*F3))
+  return(TSS_ESI_F1_F3)}
+```
+
+```{r}
+EV_TN(Wq3S_Cam, 0, 1.6)
+```
+
+```{r}
+EV_TP(Wq3S_Cam, 0.13)
+```
+
+```{r}
+EV_TSS(Wq3S_Cam, 2008)
+```
+
+These outputs provide values for F1, F2, F3 and the final ESI indicator calculated by combinign the F1 and F3 values as per Shaad et al 2021 (PUT IN URL WHEN PAPER IS PUBLISHED). Each water quality output needs to be saved as an object:
+
+```{r}
+TN_WQ<-EV_TN(Wq3S_Cam, 0, 1.6)
+TP_WQ<-EV_TP(Wq3S_Cam, 0.13)
+TSS_WQ<-EV_TSS(Wq3S_Cam, 2008)
+```
+
+You then need to combine these objects to then calculate either the arithmetic or geometric mean to give the final score. First however you need to subset and combine the ESI values into a single dataframe.
+
+First reduce the dataframe to just the ESI value and rename it, this is a two step process for each water quality parameter, first TN
+
+```{r}
+TN_ESI<-dplyr::select(TN_WQ, ESI_F1_3)
+TN_ESI<-dplyr::rename(TN_ESI, TN=ESI_F1_3)
+```
+
+```{r}
+TN_ESI
+```
+
+Repeat for TP and TSS:
+```{r}
+TP_ESI<-dplyr::select(TP_WQ, ESI_F1_3)
+TP_ESI<-dplyr::rename(TP_ESI, TP=ESI_F1_3)
+TSS_ESI<-dplyr::select(TSS_WQ, ESI_F1_3)
+TSS_ESI<-dplyr::rename(TSS_ESI, TSS=ESI_F1_3)
+```
+
+As the merge function will only combine two objects at a time, you will need to sequentially merge the individual water quality objects. Start with two ojects in this case ```TP_ESI``` and ```TN_ESI``` which you merge to create ```WQ_ESI```. 
+
+```{r}
+WQ_ESI<-merge(TP_ESI, TN_ESI)
+```
+
+Then use add other objects to ```WQ_ESI``` until all are combined into a dataframe
+```{r}
+WQ_ESI<-merge(WQ_ESI, TSS_ESI)
+```
+
+```{r}
+WQ_ESI
+```
+
+Using this dataframe you can then calculate either the arithmetic mean
+
+```{r}
+rowMeans(WQ_ESI)
+```
+
+or the  geometric mean
+```{r}
+exp(rowMeans(log(WQ_ESI)))
+```
+
+# Ecosystem Service Indicator
+The FHI measures a suite of Provisioning, Regulation & Support, and Cultural Ecosystem Service indicators. The Provisioning and Regulation & Support indicators are calculated using the method outlined in Shaad et al. (2021). Shaad et al., (2021) describe three alternative methods that can be used to calculate the indicator. The FHI package contains functions that can calculate Method 1 and the recommended Method 2. To calculate both methods the a data file with two column headings: Name, which provides the spatial data, and Variable, which is the measurement of the ecosystem service.
+
+```{r, results="hide", echo=FALSE}
+data(ES_test)
+```
+
+```{r, results = 'asis', echo=FALSE}
+knitr::kable(
+  head(ES_test, 10), caption = 'Table 4. Example ecosystem service data.'
+)
+```
+
+As with the water quality variables the user needs to provide a threshold value for the ecosystem service. The function requires four packages. Two, 'plyr','dplyr', need to be loaded.
+```{r, message=FALSE}
+library(plyr)
+library(dplyr)
+```
+
+Whilst 'gdata' and 'reshape2' need only be installed as the code will call them when required.
+
+## Method 1
+To calculate the indicator using Method 1 you use the ```ES_M1``` function, which has two parameters:
+
+*   x - the input date file, ES_test in our example
+*   Threshold - Threshold value, 0.13 in our example. If the variable falls below this value then the service is not being met.
+
+
+```{r, echo=FALSE}
+ES_M1<- function (x, Threshold){
+  x$Threshold <- Threshold
+  ES_F1_1<-plyr::ddply(x,.(Variable),transform,
+                          Variable_1 = ifelse(Variable < Threshold,0,1))%>%
+    ##calculate F1 values
+    plyr::ddply(.(Name), plyr::summarise,
+                ES_0 = sum(Variable_1=="0",na.rm=T), ES_1 = sum(Variable_1=="1",na.rm=T))
+
+  ##calculate individual site values for F1 and F2, an F1 of 1 means a failure
+  ES_F1_2<-plyr::ddply(ES_F1_1,.(ES_0), transform, ES_F1 = ifelse(ES_0==0,0,1))%>%
+
+    ##summary F1 values
+    ## melt data prior to analysis if you get an error object 'Name' not found then you need to attach the names to the input data file
+    reshape2::melt(id.vars=c("Name"))
+
+  ## number of occurrences which exceeded threshold value this needs to be its own variable for later use
+  ES_F1_3<-plyr::ddply(ES_F1_2,. (variable), summarise, Sum_var = sum(value))
+
+  ##determine number of sites
+  ES_sites_1 <- plyr::ddply(ES_F1_2, .(Name), summarise, Numb = length(unique(Name)))
+
+  ES_sites_2 <- plyr::count(ES_sites_1$Numb)
+
+  ##Final calculations of F1 values
+  ES_F1_3$freq<-ES_sites_2$freq
+  ES_F1_4 <- plyr::ddply(ES_F1_3,. (variable, Sum_var), transform,
+                            F1 = (Sum_var/(freq)*100),
+                            ESI_F1 = 100-((Sum_var/(freq))*100)
+  )
+  ES_F1_4<-ES_F1_4[,-3]
+
+
+  ##F1 values for difference in site
+  F1_output <- subset(ES_F1_4, select = c("variable", "F1", "ESI_F1"), variable == c("ES_F1"))
+
+  ############################################################################################################
+  ## CALCULATE F2##
+  ##calculate total number of instances monitored for each site
+  ES_F2_1 <- plyr::ddply(ES_F1_1,. (Name, ES_0, ES_1), transform,
+                            ES_T = ES_0 + ES_1, Factor = "F2")%>%
+    subset(., select = c("ES_0", "ES_T", "Factor"))
+
+  ES_F2_2 <-  plyr::ddply(ES_F2_1, .(Factor), colwise(sum))
+
+  ##Calculate F2 values
+  F2_output <- plyr::ddply(ES_F2_2,. (ES_0, ES_T), transform, ES_F2 = ((ES_0/ES_T)*100))%>%
+    ## melt data prior to analysis
+    reshape2::melt(., id.vars=c("Factor"))%>%
+    subset(., select = c("variable", "value"), variable == c("ES_F2"))
+
+  ###########################################################################################################
+  ## calculate ENI for F1 AND F2
+  ## combine the F1 and F2 output and then clean it up
+  F2_output <-rename(F2_output, c("variable"="var"))
+  F1_F2<-cbind(F1_output,F2_output)%>%
+    rename(., c("value"="F2"))%>%
+    plyr::ddply(.,.(variable), transform, Parameter=ifelse(variable=="ES_F1","ES","ES"))%>%
+    subset(., select = c("Parameter","F1", "F2"))
+
+  ########################################################################################
+  ##calculate F3
+  ES_F3_1<-plyr::ddply(x,.(Variable),transform,
+                          ES_Exc = ifelse(Variable < Threshold,(Threshold/Variable)-1,NA),
+                          Factor = "F3")%>%
+
+    ##sum of all excursions
+    subset(., select = c("ES_Exc", "Factor"))%>%
+    plyr::ddply(., .(Factor), colwise(sum), na.rm=T)
+  ## total number of instances
+
+  ##combine sum of excursions and instances
+  ES_F3_2<-subset(ES_F2_2, select = c("Factor", "ES_T"))%>%
+    rename(., c("Factor"="Fact"))
+
+  ES_F3_3<-cbind(ES_F3_1,ES_F3_2)%>%
+    subset(., select = c("Factor", "ES_Exc", "ES_T"))%>%
+    plyr::ddply(.,. (ES_Exc), transform, ES_nse = ES_Exc/ES_T)%>%
+    plyr::ddply(., . (ES_nse), transform, ES_F3 = ((ES_nse)/(ES_nse+1))*100)%>%
+    ## summarise F3 calculations
+    subset(., select = c("Factor", "ES_F3"))%>%
+    ## calculate ENI for F3
+    reshape2::melt(., id.vars=c("Factor"))
+
+  ## combine the F1, F2 and F3 output and then clean it up
+  F1_F2_F3<-cbind(F1_F2, ES_F3_3)%>%
+    rename(., c("value"="F3"))%>%
+    subset(., select = c("Parameter","F1", "F2", "F3"))
+
+   ESI_F1_3 <- plyr::ddply(F1_F2_F3,. (F1,F2,F3), transform,
+                          ESI_F3 = 100-sqrt(((F1^2+F2^2+F3^2)/3))
+                       )
+
+
+  return(ESI_F1_3)
+}
+```
+
+```{r}
+ES_M1(ES_test, 0.13)
+```
+
+The ```ES_M1``` function provides measures of F1, F2, F3 and a single ESI score which combines the three F scores as per Shaad et al (2021).
+
+## Method 2
+Similarly to calculate the indicator using Method 2 you use the ```ES_M2``` function, which has the same two parameters:
+
+*   x - the input date file, ES_test in our example
+*   Threshold - Threshold value, 0.13 in our example. If the variable falls below this value then the service is not being met.
+
+```{r, echo=FALSE}
+ES_M2<- function (x, Threshold){
+  x$Threshold <- Threshold
+  ES_F1_1<-plyr::ddply(x,.(Variable),transform,
+                       Variable_1 = ifelse(Variable < Threshold,0,1))%>%
+    ##calculate F1 values
+    plyr::ddply(.(Name), plyr::summarise,
+                ES_0 = sum(Variable_1=="0",na.rm=T), ES_1 = sum(Variable_1=="1",na.rm=T))
+
+  ##calculate individual site values for F1 and F2, an F1 of 1 means a failure
+  ES_F1_2<-plyr::ddply(ES_F1_1,.(ES_0), transform, ES_F1 = ifelse(ES_0==0,0,1))%>%
+
+    ##summary F1 values
+    ## melt data prior to analysis if you get an error object 'Name' not found then you need to attach the names to the input data file
+    reshape2::melt(id.vars=c("Name"))
+
+  ## number of occurrences which exceeded threshold value this needs to be its own variable for later use
+  ES_F1_3<-plyr::ddply(ES_F1_2,. (variable), summarise, Sum_var = sum(value))
+
+  ##determine number of sites I THINK I NEED TO MAKE THIS ITS OWN FUNCTION
+  ES_sites_1 <- plyr::ddply(ES_F1_2, .(Name), summarise, Numb = length(unique(Name)))
+
+  ES_sites_2 <- plyr::count(ES_sites_1$Numb)
+
+  ##Final calculations of F1 values
+  ES_F1_3$freq<-ES_sites_2$freq
+  ES_F1_4 <- plyr::ddply(ES_F1_3,. (variable, Sum_var), transform,
+                         F1 = (Sum_var/(freq)*100),
+                         ESI_F1 = 100-((Sum_var/(freq))*100)
+  )
+  ES_F1_4<-ES_F1_4[,-3]
+
+
+  ##F1 values for difference in site
+  F1_output <- subset(ES_F1_4, select = c("variable", "F1", "ESI_F1"), variable == c("ES_F1"))
+
+  ############################################################################################################
+  ## CALCULATE F2##
+  ##calculate total number of instances monitored for each site
+  ES_F2_1 <- plyr::ddply(ES_F1_1,. (Name, ES_0, ES_1), transform,
+                         ES_T = ES_0 + ES_1, Factor = "F2")%>%
+    subset(., select = c("ES_0", "ES_T", "Factor"))
+
+  ES_F2_2 <-  plyr::ddply(ES_F2_1, .(Factor), colwise(sum))
+
+  ##Calculate F2 values
+  F2_output <- plyr::ddply(ES_F2_2,. (ES_0, ES_T), transform, ES_F2 = ((ES_0/ES_T)*100))%>%
+    ## melt data prior to analysis
+    reshape2::melt(., id.vars=c("Factor"))%>%
+    subset(., select = c("variable", "value"), variable == c("ES_F2"))
+
+  ###########################################################################################################
+  ## calculate ENI for F1 AND F2
+  ## combine the F1 and F2 output and then clean it up
+  F2_output <-rename(F2_output, c("variable"="var"))
+  F1_F2<-cbind(F1_output,F2_output)%>%
+    rename(., c("value"="F2"))%>%
+    plyr::ddply(.,.(variable), transform, Parameter=ifelse(variable=="ES_F1","ES","ES"))%>%
+    subset(., select = c("Parameter","F1", "F2"))
+
+  ########################################################################################
+  ##calculate F3
+  ES_F3_1<-plyr::ddply(x,.(Variable),transform,
+                       ES_Exc = ifelse(Variable < Threshold,(Threshold/Variable)-1,NA),
+                       Factor = "F3")%>%
+
+
+    ##sum of all excursions
+    subset(., select = c("ES_Exc", "Factor"))%>%
+    plyr::ddply(., .(Factor), colwise(sum), na.rm=T)
+
+  ##combine sum of excursions and instances
+  ES_F3_2<-subset(ES_F2_2, select = c("Factor", "ES_T"))%>%
+    rename(., c("Factor"="Fact"))
+
+  ES_F3_3<-cbind(ES_F3_1,ES_F3_2)%>%
+    subset(., select = c("Factor", "ES_Exc", "ES_T"))%>%
+    plyr::ddply(.,. (ES_Exc), transform, ES_nse = ES_Exc/ES_T)%>%
+    plyr::ddply(., . (ES_nse), transform, ES_F3 = ((ES_nse)/(ES_nse+1))*100)%>%
+    ## summarise F3 calculations
+    subset(., select = c("Factor", "ES_F3"))%>%
+    ## calculate ENI for F3
+    reshape2::melt(., id.vars=c("Factor"))
+
+  ## combine the F1, F2 and F3 output and then clean it up
+  F1_F2_F3<-cbind(F1_F2, ES_F3_3)%>%
+    rename(., c("value"="F3"))%>%
+    subset(., select = c("Parameter","F1", "F2", "F3"))
+
+  ##Method 2 ESI
+  ESI_F1_3 <- plyr::ddply(F1_F2_F3,. (F1,F3), transform,
+                          ESI_F1 = 100-F1,
+                          ESI_F1_2 = 100-(sqrt(F1*F2)),
+                          ESI_F1_3 = 100-(sqrt(F1*F3)))
+
+  return(ESI_F1_3)
+}
+```
+
+
+```{r}
+ES_M2(ES_test, 0.13)
+```
+
+The ```ES_M2``` function provides measures of F1, F2, F3 and three ESI scores as per Shaad et al (2021). ESI_F1 uses the F1 value only, ESI_F1_2 combines F1 and F2 and ESI_F1_3 combines the F1 and F3 scores.
+
+# Tonle Sap Lake daily fish catch
+## Biomass for consumption
+
+Local fishers on Cambodia's Tonle Sap lake collect a variety of daily catch data. The total weight of their catch can be used to calculate the Ecosystem Service biomass for consumption metric. To calculate the metric a daily catch threshold value and spatial groups are required. The following input data is used:
+
+```{r, results="hide", echo=FALSE}
+data(DailyCatch)
+```
+
+```{r, results = 'asis', echo=FALSE}
+knitr::kable(
+  head(DailyCatch, 10), caption = 'Table 5. Example daily fish catch data.'
+)
+```
+
+As with the other functions the Date (as recorded in the CatchDate column) needs to be formatted as YYYY/MM/DD. The WeightCaught column lists the total weight of the fishers combined catch in kg. Station is the highest level of spatial grouping. And Location is a spatial grouping nested within each Location. For the Tonle Sap Station lists Community Fishery (CFi) areas or non-CFi villages. Locations are the names of fishing grounds within a CFi or around a village. For the following functions, the data in CatchRecord, Latitude, Longitude, or Habitat are used.
+
+To run these functions you need four packages. Two, 'plyr','dplyr', need to be loaded.
+```{r, message=FALSE}
+library(plyr)
+library(dplyr)
+```
+
+Whilst 'gdata' and 'reshape2' need only be installed as the code will call them when required.
+
+The simplest function ```ES_DFC```  will calculate the metric across Stations for a single threshold.
+```{r, echo=FALSE}
+ES_DFC<- function (x, DFC_thresh, S_Date, E_Date){
+  x$DFC_thresh <- DFC_thresh
+  DFC_F1_a<-plyr::ddply(x,.(CatchDate),mutate,
+                        CatchDate = lubridate::ymd(CatchDate))%>%
+    plyr::ddply(.(CatchDate), filter,(CatchDate >= as.Date(S_Date) & CatchDate <= as.Date(E_Date)))
+
+
+
+  DFC_F1_1<-plyr::ddply(DFC_F1_a,.(WeightCaught),transform,
+                        WeightCaught_1 = ifelse(WeightCaught < DFC_thresh,0,1))%>%
+    ##calculate F1 values
+    plyr::ddply(.(Station), plyr::summarise,
+                WeightCaught_0 = sum(WeightCaught_1=="0",na.rm=T), WeightCaught_1 = sum(WeightCaught_1=="1",na.rm=T))
+
+  ##calculate individual site values for F1 and F2, an F1 of 1 means a failure
+  DFC_F1_2<-plyr::ddply(DFC_F1_1,.(WeightCaught_0), transform, DFC_F1 = ifelse(WeightCaught_0==0,0,1))%>%
+
+    ##summary F1 values
+    ## melt data prior to analysis if you get an error object 'Station' not found then you need to attach the names to the input data file
+    reshape2::melt(id.vars=c("Station"))
+
+  ## number of occurrences which exceeded threshold value this needs to be its own variable for later use
+  DFC_F1_3<-plyr::ddply(DFC_F1_2,. (variable), summarise, Sum_var = sum(value))
+
+  ##determine number of sites
+  DFC_sites_1 <- plyr::ddply(DFC_F1_2, .(Station), summarise, Numb = length(unique(Station)))
+
+  DFC_sites_2 <- plyr::count(DFC_sites_1$Numb)
+
+  ##Final calculations of F1 values
+  DFC_F1_3$freq<-DFC_sites_2$freq
+  DFC_F1_4 <- plyr::ddply(DFC_F1_3,. (variable, Sum_var), transform,
+                            F1 = (Sum_var/(freq)*100),
+                            ESI_F1 = 100-((Sum_var/(freq))*100)
+  )
+  DFC_F1_4<-DFC_F1_4[,-3]
+
+
+  ##F1 values for difference in site
+  F1_output <- subset(DFC_F1_4, select = c("variable", "F1", "ESI_F1"), variable == c("DFC_F1"))
+
+
+  ############################################################################################################
+  ## CALCULATE F2##
+  ##calculate total number of instances monitored for each site
+  DFC_F2_1 <- plyr::ddply(DFC_F1_1,. (Station, WeightCaught_0, WeightCaught_1), transform,
+                            WeightCaught_T = WeightCaught_0 + WeightCaught_1, Factor = "F2")%>%
+    subset(., select = c("WeightCaught_0", "WeightCaught_T", "Factor"))
+
+  DFC_F2_2 <-  plyr::ddply(DFC_F2_1, .(Factor), colwise(sum))
+
+
+  ##Calculate F2 values
+  F2_output <- plyr::ddply(DFC_F2_2,. (WeightCaught_0, WeightCaught_T), transform, WeightCaught_F2 = ((WeightCaught_0/WeightCaught_T)*100))%>%
+    ## melt data prior to analysis
+    reshape2::melt(., id.vars=c("Factor"))%>%
+    subset(., select = c("variable", "value"), variable == c("WeightCaught_F2"))
+
+
+  ###########################################################################################################
+  ## calculate ENI for F1 AND F2
+  ## combine the F1 and F2 output and then clean it up
+  F2_output <-rename(F2_output, c("variable"="var"))
+  F1_F2<-cbind(F1_output,F2_output)%>%
+    rename(., c("value"="F2"))%>%
+    plyr::ddply(.,.(variable), transform, Parameter=ifelse(variable=="DFC_F1","WeightCaught","WeightCaught"))%>%
+    subset(., select = c("Parameter","F1", "F2"))
+
+  ########################################################################################
+  ##calculate F3
+  DFC_F3_1<-plyr::ddply(DFC_F1_a,.(WeightCaught),transform,
+                          DFC_Exc = ifelse(WeightCaught < DFC_thresh,(DFC_thresh/WeightCaught)-1,NA),
+                          Factor = "F3")%>%
+
+    ##sum of all excursions
+    subset(., select = c("DFC_Exc", "Factor"))%>%
+    plyr::ddply(., .(Factor), colwise(sum), na.rm=T)
+  ## total number of instances
+
+
+  ##combine sum of excursions and instances
+  DFC_F3_2<-subset(DFC_F2_2, select = c("Factor", "WeightCaught_T"))%>%
+    rename(., c("Factor"="Fact"))
+
+  DFC_F3_3<-cbind(DFC_F3_1,DFC_F3_2)%>%
+    subset(., select = c("Factor", "DFC_Exc", "WeightCaught_T"))%>%
+    plyr::ddply(.,. (DFC_Exc), transform, DFC_nse = DFC_Exc/WeightCaught_T)%>%
+    plyr::ddply(., . (DFC_nse), transform, DFC_F3 = ((DFC_nse)/(DFC_nse+1))*100)%>%
+    ## summarise F3 calculations
+    subset(., select = c("Factor", "DFC_F3"))%>%
+    ## calculate ENI for F3
+    reshape2::melt(., id.vars=c("Factor"))
+
+  ## combine the F1, F2 and F3 output and then clean it up
+  F1_F2_F3<-cbind(F1_F2, DFC_F3_3)%>%
+    rename(., c("value"="F3"))%>%
+    subset(., select = c("Parameter","F1", "F2", "F3"))
+
+  ##Method 2 ESI
+  ESI_F1_F3_DFC <- plyr::ddply(F1_F2_F3,. (F1,F3), transform,
+                              ESI_F1_3 = 100-(sqrt(F1*F3)))
+
+  return(ESI_F1_F3_DFC)
+}
+```
+
+```{r}
+ES_DFC(DailyCatch, 1.5, '2015-01-01', '2021-01-08')
+```
+
+The ```ES_DFC``` function has four parameters, listed in order
+
+*   x - the input date file, DailyCath in our example
+*   DFC_thresh - Daily catch threshold weight, 1.5 kg in our example as this is the amount fishers require for their daily subsistence needs, regardless of month.
+*   S_Date -  Start date for the assessment period, 2015-01-01 in our example
+*   E_Date - End date for the assessment period, 2021-01-08 in our example
+
+Rather than a single threshold for the entire time period the ```ES_DFC_M``` function can calculate the metric using different total catch weight monthly thresholds. We have two sets of monthly thresholds one for the minimum catch required before their surplus catch is sold to market or traders and an ideal best case daily catch weight.
+
+Table 6. Daily catch threshold weights (kg) for each month. The three columns are threshold values for daily subsistence, surplus for trade and ideal catch.
+
+|Month|Subsistence| Trade |Ideal|
+|----:|:----------|-------|:---:|
+| Jan |    1.5    |  15   |  50 |
+| Feb |    1.5    |   9   |  50 |
+| Mar |    1.5    |   8   |  20 |
+| Apr |    1.5    |   4   |  20 |
+| May |    1.5    |   4   |  10 |
+| Jun |    1.5    |   5   |  50 |
+| Jul |    1.5    |   5   |  50 |
+| Aug |    1.5    |   5   |  50 |
+| Sep |    1.5    |   9   |  50 |
+| Oct |    1.5    |   9   |  50 |
+| Nov |    1.5    |  10   |  50 |
+| Dec |    1.5    |  10   |  50 |
+
+
+This indicator requires the 'lubridate' package. This does not need to be loaded as the function will call it when required.
+
+```{r, echo=FALSE}
+ES_DFC_M<- function (x, Jan_t, Feb_t, Mar_t, Apr_t, May_t, Jun_t, Jul_t, Aug_t, Sep_t,  Oct_t, Nov_t, Dec_t, S_Date, E_Date){
+  x$Jan_t <- Jan_t
+  x$Feb_t <- Feb_t
+  x$Mar_t <- Mar_t
+  x$Apr_t <- Apr_t
+  x$May_t <- May_t
+  x$Jun_t <- Jun_t
+  x$Jul_t <- Jul_t
+  x$Aug_t <- Aug_t
+  x$Sep_t <- Sep_t
+  x$Oct_t <- Oct_t
+  x$Nov_t <- Nov_t
+  x$Dec_t <- Dec_t
+
+  ##Generate a column of months from the date column
+  DFC_F1_a<-plyr::ddply(x,.(CatchDate),mutate,
+                        CatchDate = lubridate::ymd(CatchDate))%>%
+    plyr::ddply(.(CatchDate), filter,(CatchDate >= as.Date(S_Date) & CatchDate <= as.Date(E_Date)))%>%
+    plyr::ddply(.(CatchDate),transform,
+                        Catchmonth = lubridate::month(CatchDate, label = FALSE))
+
+
+
+  DFC_F1_1<- plyr::ddply(DFC_F1_a,.(Catchmonth, WeightCaught), mutate,
+                                WeightCaught_1 = dplyr::case_when(
+                        (Catchmonth = 1 & WeightCaught < Jan_t) ~0,
+                        (Catchmonth = 2 & WeightCaught < Feb_t) ~0,
+                        (Catchmonth = 3 & WeightCaught < Mar_t) ~0,
+                        (Catchmonth = 4 & WeightCaught < Apr_t) ~0,
+                        (Catchmonth = 5 & WeightCaught < May_t) ~0,
+                        (Catchmonth = 6 & WeightCaught < Jun_t) ~0,
+                        (Catchmonth = 7 & WeightCaught < Jul_t) ~0,
+                        (Catchmonth = 8 & WeightCaught < Aug_t) ~0,
+                        (Catchmonth = 9 & WeightCaught < Sep_t) ~0,
+                        (Catchmonth = 10 & WeightCaught < Oct_t) ~0,
+                        (Catchmonth = 11 & WeightCaught < Nov_t) ~0,
+                        (Catchmonth = 12 & WeightCaught < Dec_t) ~0,
+                        TRUE ~ 1
+              )
+                                                )%>%
+    ##calculate F1 values
+    plyr::ddply(.(Station), plyr::summarise,
+                WeightCaught_0 = sum(WeightCaught_1=="0",na.rm=T), WeightCaught_1 = sum(WeightCaught_1=="1",na.rm=T))
+
+  ##calculate individual site values for F1 and F2, an F1 of 1 means a failure
+  DFC_F1_2<-plyr::ddply(DFC_F1_1,.(WeightCaught_0), transform, DFC_F1 = ifelse(WeightCaught_0==0,0,1))%>%
+
+    ##summary F1 values
+    ## melt data prior to analysis if you get an error object 'Station' not found then you need to attach the names to the input data file
+    reshape2::melt(id.vars=c("Station"))
+
+  ## number of occurrences which exceeded threshold value this needs to be its own variable for later use
+  DFC_F1_3<-plyr::ddply(DFC_F1_2,. (variable), summarise, Sum_var = sum(value))
+
+  ##determine number of sites
+  DFC_sites_1 <- plyr::ddply(DFC_F1_2, .(Station), summarise, Numb = length(unique(Station)))
+
+  DFC_sites_2 <- count(DFC_sites_1$Numb)
+
+  ##Final calculations of F1 values
+  DFC_F1_3$freq<-DFC_sites_2$freq
+  DFC_F1_4 <- plyr::ddply(DFC_F1_3,. (variable, Sum_var), transform,
+                          F1 = (Sum_var/(freq)*100),
+                          ESI_F1 = 100-((Sum_var/(freq))*100)
+  )
+  DFC_F1_4<-DFC_F1_4[,-3]
+
+
+  ##F1 values for difference in site
+  F1_output <- subset(DFC_F1_4, select = c("variable", "F1", "ESI_F1"), variable == c("DFC_F1"))
+
+
+  ############################################################################################################
+  ## CALCULATE F2##
+  ##calculate total number of instances monitored for each site
+  DFC_F2_1 <- plyr::ddply(DFC_F1_1,. (Station, WeightCaught_0, WeightCaught_1), transform,
+                          WeightCaught_T = WeightCaught_0 + WeightCaught_1, Factor = "F2")%>%
+    subset(., select = c("WeightCaught_0", "WeightCaught_T", "Factor"))
+
+  DFC_F2_2 <-  plyr::ddply(DFC_F2_1, .(Factor), colwise(sum))
+
+  ##Calculate F2 values
+  F2_output <- plyr::ddply(DFC_F2_2,. (WeightCaught_0, WeightCaught_T), transform, WeightCaught_F2 = ((WeightCaught_0/WeightCaught_T)*100))%>%
+    ## melt data prior to analysis
+    reshape2::melt(., id.vars=c("Factor"))%>%
+    subset(., select = c("variable", "value"), variable == c("WeightCaught_F2"))
+
+  ###########################################################################################################
+  ## calculate ENI for F1 AND F2
+  ## combine the F1 and F2 output and then clean it up
+  F2_output <-rename(F2_output, c("variable"="var"))
+  F1_F2<-cbind(F1_output,F2_output)%>%
+    rename(., c("value"="F2"))%>%
+    plyr::ddply(.,.(variable), transform, Parameter=ifelse(variable=="DFC_F1","WeightCaught","WeightCaught"))%>%
+    subset(., select = c("Parameter","F1", "F2"))
+
+  ########################################################################################
+  ##calculate F3
+
+  DFC_F3_1<- plyr::ddply(DFC_F1_a,.(Catchmonth, WeightCaught), mutate,
+                           DFC_Ex = dplyr::case_when(
+                             (Catchmonth = 1 & WeightCaught < Jan_t) ~ (Jan_t/WeightCaught)-1,
+                             (Catchmonth = 2 & WeightCaught < Feb_t) ~ (Feb_t/WeightCaught)-1,
+                             (Catchmonth = 3 & WeightCaught < Mar_t) ~ (Mar_t/WeightCaught)-1,
+                             (Catchmonth = 4 & WeightCaught < Apr_t) ~ (Apr_t/WeightCaught)-1,
+                             (Catchmonth = 5 & WeightCaught < May_t) ~ (May_t/WeightCaught)-1,
+                             (Catchmonth = 6 & WeightCaught < Jun_t) ~ (Jun_t/WeightCaught)-1,
+                             (Catchmonth = 7 & WeightCaught < Jul_t) ~ (Jul_t/WeightCaught)-1,
+                             (Catchmonth = 8 & WeightCaught < Aug_t) ~ (Aug_t/WeightCaught)-1,
+                             (Catchmonth = 9 & WeightCaught < Sep_t) ~ (Sep_t/WeightCaught)-1,
+                             (Catchmonth = 10 & WeightCaught < Oct_t) ~ (Oct_t/WeightCaught)-1,
+                             (Catchmonth = 11 & WeightCaught < Nov_t) ~ (Nov_t/WeightCaught)-1,
+                             (Catchmonth = 12 & WeightCaught < Dec_t) ~ (Dec_t/WeightCaught)-1,
+                             TRUE ~ -9999),
+                            Factor = "F3",
+                         DFC_Exc= dplyr::na_if(DFC_Ex, -9999)
+
+    ) %>%
+
+
+    ##sum of all excursions
+    subset(., select = c("DFC_Exc", "Factor"))%>%
+    plyr::ddply(., .(Factor), colwise(sum), na.rm=T)
+  ## total number of instances
+
+  ##combine sum of excursions and instances
+  DFC_F3_2<-subset(DFC_F2_2, select = c("Factor", "WeightCaught_T"))%>%
+    rename(., c("Factor"="Fact"))
+
+  DFC_F3_3<-cbind(DFC_F3_1,DFC_F3_2)%>%
+    subset(., select = c("Factor", "DFC_Exc", "WeightCaught_T"))%>%
+    plyr::ddply(.,. (DFC_Exc), transform, DFC_nse = (DFC_Exc/WeightCaught_T))%>%
+    plyr::ddply(., . (DFC_nse), transform, DFC_F3 = ((DFC_nse)/(DFC_nse+1))*100)%>%
+    ## summarise F3 calculations
+    subset(., select = c("Factor", "DFC_F3"))%>%
+    ## calculate ENI for F3
+    reshape2::melt(., id.vars=c("Factor"))
+
+  ## combine the F1, F2 and F3 output and then clean it up
+  F1_F2_F3<-cbind(F1_F2, DFC_F3_3)%>%
+    rename(., c("value"="F3"))%>%
+    subset(., select = c("Parameter","F1", "F2", "F3"))
+
+  ##Method 2 ESI
+  ESI_F1_F3_DFC <- plyr::ddply(F1_F2_F3,. (F1,F3), transform,
+                               ESI_F1_3 = 100-(sqrt(F1*F3)))
+
+  return(ESI_F1_F3_DFC)
+}
+```
+
+
+```{r}
+ES_DFC_M(DailyCatch, 50, 50, 20, 20, 10, 50, 50, 50, 50, 50, 50, 50, '2021-01-01', '2021-12-31')
+```
+
+The ```ES_DFC``` function has fifteen parameters, listed in order:
+
+*    x - the input date file, DailyCath in our example
+*    Jan_t - January daily catch threshold weight 
+*    Feb_t - February daily catch threshold weight 
+*    Mar_t - March daily catch threshold weight
+*    Apr_t - April daily catch threshold weight 
+*    May_t - May daily catch threshold weight
+*    Jun_t - June daily catch threshold weight
+*    Jul_t - July daily catch threshold weight
+*    Aug_t - August daily catch threshold weight
+*    Sep_t - September daily catch threshold weight 
+*    Oct_t - October daily catch threshold weight
+*    Nov_t - November daily catch threshold weight 
+*    Dec_t - December daily catch threshold weight 
+*    DFC_thresh - Daily catch threshold weight, 1.5 kg in our example as this is the amount fishers require for their daily subsistence needs, regardless of month.
+*    S_Date -  Start date for the assessment period, 2021-01-01 in our example
+*    E_Date - End date for the assessment period, 2021-12-31 in our example
+
+In the example the ideal catch values are used.
+
+Two further functions are provided that allow the metric to be calculated for a single CFi.
+
+```ES_DFC_S``` is analogous to ```ES_DFC```  and ```ES_DFC_SM``` is analogous to ```ES_DFC_M```. Both have the addition of the 'CFi' parameter which names a CFi in the Station column. The various factors in the Location column are used as the spatial variables.
+Examples for both functions are as follows:
+
+```ES_DFC_S(DailyCatch, "Balat", 1.5, '2018-01-01', '2021-08-31')```
+```ES_DFC_SM(DailyCatch, "Balat", 50, 50, 20, 20, 10, 50, 50, 50, 50, 50, 50, 50, '2021-01-01', '2021-12-31')```
+
+Often you may wish to select a subset of  CFis (Stations) for analysis. Typing ```unique(Station)```will give the names of stations these can be subsetted as follows:
+
+```Cfi_Pursat<-filter(DailyCatch, Station %in% c("Srey Chek", "Ou Ta Prok", "Anlong Reang", "Kampong Prak"))```
+
+# References
+Shaad K, Souter NJ, Vollmer D, Regan HM, Bezerra, MO. (2021) Integrating ecosystem services into water resource management: an indicator-based approach. Environmental Management.
+
+Souter NJ, Shaad K, Vollmer D, Regan HM, Farrell TA, Arnaiz M, Meynell P-J, Cochrane TA, Arias ME, Piman T, Andelman SJ. (2020) Using the Freshwater Health Index to Assess Hydropower Development Scenarios in the Sesan, Srepok and Sekong River Basin. Water. 12(3):788. https://doi.org/10.3390/w12030788
+
