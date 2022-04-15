@@ -8,9 +8,21 @@
 #' @param WQ_high upper water quality threshold value
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' EV_WQ(Wq3S_Cam, "TOTN_mgL", 0, 1.6)
 
@@ -169,9 +181,21 @@ EV_WQ<- function (x, parameter, WQ_low, WQ_high){
 #' @param cutoff Threshold year. This is the final year of the pre assessment period, thus if your impact period starts in 2012, enter 2011
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' EV_WQU(Wq3S_Cam, "TOTP_mgL", 2008)
 

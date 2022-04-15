@@ -4,9 +4,21 @@
 #' @param y threshold year this is the year previous to the first assessment year
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' EV_TSS(Wq3S_Cam, 2008)
 

@@ -6,9 +6,21 @@
 #' @param DFC_thresh Daily catch threshold weight
 #' @param S_Date Start date for the assessment period
 #' @param E_Date End date for the assessment period
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
 #' @examples
@@ -163,10 +175,22 @@ ES_DFC<- function (x, DFC_thresh, S_Date, E_Date){
 #' @param E_Date End date for assessment period
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' lubridate
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' ES_DFC_M(DailyCatch, 50, 50, 20, 20, 10, 50, 50, 50, 50, 50, 50, 50, '2021-01-01', '2021-12-31')
 
@@ -355,9 +379,21 @@ ES_DFC_M<- function (x, Jan_t, Feb_t, Mar_t, Apr_t, May_t, Jun_t, Jul_t, Aug_t, 
 #' @param E_Date End date for assessment period
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' ES_DFC_S(DailyCatch, "Balat", 1.5, '2018-01-01', '2021-08-31')
 
@@ -500,11 +536,23 @@ ES_DFC_S<- function (x, CFi, DFC_thresh, S_Date, E_Date){
 #' @param S_Date Start date for assessment period
 #' @param E_Date End date for assessment period
 #' @import
-#' dplyr
 #' gdata
 #' lubridate
 #' plyr
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' ES_DFC_SM(DailyCatch, "Balat", 50, 50, 20, 20, 10, 50, 50,
 #' 50, 50, 50, 50, 50, '2021-01-01', '2021-12-31')

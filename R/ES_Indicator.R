@@ -4,9 +4,21 @@
 #' @param Threshold upper threshold value
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' ES_M1(ES_test, 0.13)
 
@@ -122,9 +134,21 @@ ES_M1<- function (x, Threshold){
 #' @param Threshold upper threshold value
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' ES_M2(ES_test, 0.09)
 
