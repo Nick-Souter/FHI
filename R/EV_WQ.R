@@ -7,9 +7,21 @@
 #' @param TN_high upper threshold value
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' EV_TN(Wq3S_Cam, 0, 1.6)
 
@@ -137,9 +149,21 @@ EV_TN<- function (x, TN_low, TN_high){
 #' @param TP_high upper threshold value
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' EV_TP(Wq3S_Cam, 0.13)
 
@@ -262,9 +286,21 @@ EV_TP<- function (x, TP_high){
 #' @param pH_high upper threshold value
 #' @import
 #' plyr
-#' dplyr
 #' gdata
 #' reshape2
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' EV_pH(Wq3S_Cam, 6, 9)
 

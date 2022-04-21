@@ -15,7 +15,19 @@ export(EV_WQ)
 export(EV_WQU)
 export(EV_pH)
 export(Summary_stats)
-import(dplyr)
+import(dplyr, except = c(
+last,
+combine,
+first,
+failwith,
+id,
+summarize,
+count,
+desc,
+mutate,
+arrange,
+rename,
+summarise))
 import(gdata)
 import(lubridate)
 import(plyr)

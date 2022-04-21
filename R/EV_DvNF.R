@@ -2,8 +2,20 @@
 #'
 #' @param x input file
 #' @import
-#' dplyr
 #' lubridate
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' DvNF_model(KL_MOD)
 
@@ -59,8 +71,20 @@ DvNF_model <- function (x){
 #' @param y start year for the regulated period
 #' @param z end year of the unregulated data
 #' @import
-#' dplyr
 #' lubridate
+#' @rawNamespace import(dplyr, except = c(
+#' last,
+#' combine,
+#' first,
+#' failwith,
+#' id,
+#' summarize,
+#' count,
+#' desc,
+#' mutate,
+#' arrange,
+#' rename,
+#' summarise))
 #' @examples
 #' DvNF_gauge(PK_HT, 2014, 1990)
 

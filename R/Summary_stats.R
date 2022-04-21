@@ -19,7 +19,7 @@
 
 ##utils::globalVariables(c("sd", "qt"))
 Summary_stats <- function(x, measurevar, groupvars=NULL, na.rm=FALSE,
-                          conf.interval=.95, .drop=TRUE) {
+                          conf.interval=.99, .drop=TRUE) {
 
   # New version of length which can handle NA's: if na.rm==T, don't count them
   length2 <- function (x, na.rm=FALSE) {
